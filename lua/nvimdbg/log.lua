@@ -9,6 +9,7 @@ function M.init(conf)
 end
 
 function M.log(str)
+  log_filename = vim.fn.stdpath("data") .. "/osv.log"
   if log_filename then
     local f = io.open(log_filename, "a")
     if f then

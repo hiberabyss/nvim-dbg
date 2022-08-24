@@ -19,8 +19,6 @@ local step_in
 
 local step_out = false
 
-local seq_id = 1
-
 local nvim_server
 
 local hook_address
@@ -29,59 +27,20 @@ local auto_nvim
 
 -- for now, only accepts a single
 -- connection
-local client
-
-local debug_hook_conn 
-
 local sendProxyDAP
-
-local make_response
-
-local make_event
 
 local log = require('nvimdbg.log').log
 
 local util = require('nvimdbg.util')
+local make_event = require('dap.builder').make_event
+local make_response = require('dap.builder').make_response
 
 local M = {}
 M.disconnected = false
 
-function M.sendDAP(msg)
-  local succ, encoded = pcall(vim.fn.json_encode, msg)
-
-  if succ then
-    local bin_msg = "Content-Length: " .. string.len(encoded) .. "\r\n\r\n" .. encoded
-
-    client:write(bin_msg)
-  else
-    log(encoded)
-  end
-end
-
 function sendProxyDAP(data)
-  vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua', [[require"osv".sendDAP(...)]], {data})
-end
-
-function make_response(request, response)
-  local msg = {
-    type = "response",
-    seq = seq_id,
-    request_seq = request.seq,
-    success = true,
-    command = request.command
-  }
-  seq_id = seq_id + 1
-  return vim.tbl_extend('error', msg, response)
-end
-
-function make_event(event)
-  local msg = {
-    type = "event",
-    seq = seq_id,
-    event = event,
-  }
-  seq_id = seq_id + 1
-  return msg
+  vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua',
+    [[require"nvimdbg.server".sendDAP(...)]], {data})
 end
 
 function M.launch(opts)
@@ -102,7 +61,8 @@ function M.launch(opts)
 
   local mode = vim.fn.rpcrequest(nvim_server, "nvim_get_mode")
   assert(not mode.blocking, "Neovim is waiting for input at startup. Aborting.")
-  if not hook_addres then
+
+  if not hook_address then
     hook_address = vim.fn.serverstart()
   end
 
@@ -110,8 +70,10 @@ function M.launch(opts)
 
   local host = (opts and opts.host) or "127.0.0.1"
   local port = (opts and opts.port) or 0
-  local server = vim.fn.rpcrequest(nvim_server, 'nvim_exec_lua', [[return require"osv".start_server(...)]], {host, port})
+  local server = vim.fn.rpcrequest(nvim_server, 'nvim_exec_lua',
+    [[return require"nvimdbg.server".start_server(...)]], {host, port})
 
+  log("Server started on port " .. server.port)
   print("Server started on port " .. server.port)
   M.disconnected = false
   vim.defer_fn(M.wait_attach, 0)
@@ -119,6 +81,7 @@ function M.launch(opts)
 end
 
 function M.wait_attach()
+  log("Begin wait attach!")
   local timer = vim.loop.new_timer()
   timer:start(0, 100, vim.schedule_wrap(function()
     local has_attach = false
@@ -723,105 +686,6 @@ function M.run_this(opts)
 
 end
 
-function M.start_server(host, port)
-  local server = vim.loop.new_tcp()
-
-  server:bind(host, port)
-
-  server:listen(128, function(err)
-    M.disconnected = false
-
-    local sock = vim.loop.new_tcp()
-    server:accept(sock)
-
-    local tcp_data = ""
-
-
-    client = sock
-
-    local function read_body(length)
-      while string.len(tcp_data) < length do
-        coroutine.yield()
-      end
-
-      local body = string.sub(tcp_data, 1, length)
-      local succ, decoded = pcall(vim.fn.json_decode, body)
-
-      tcp_data = string.sub(tcp_data, length+1)
-
-
-      return decoded
-    end
-
-    local function read_header()
-      while not string.find(tcp_data, "\r\n\r\n") do
-        coroutine.yield()
-      end
-      local content_length = string.match(tcp_data, "^Content%-Length: (%d+)")
-
-      local _, sep = string.find(tcp_data, "\r\n\r\n")
-      tcp_data = string.sub(tcp_data, sep+1)
-
-
-      return {
-        content_length = tonumber(content_length),
-      }
-    end
-
-    local dap_read = coroutine.create(function()
-      local msg
-      do
-        local len = read_header()
-        msg = read_body(len.content_length)
-      end
-
-      M.sendDAP(make_response(msg, {
-        body = {}
-      }))
-
-      M.sendDAP(make_event('initialized'))
-
-      while true do
-        local msg
-        do
-          local len = read_header()
-          msg = read_body(len.content_length)
-        end
-
-        if debug_hook_conn then
-          vim.fn.rpcrequest(debug_hook_conn, "nvim_exec_lua", [[table.insert(require"osv".server_messages, ...)]], {msg})
-        end
-
-      end
-    end)
-
-    sock:read_start(vim.schedule_wrap(function(err, chunk)
-      if chunk then
-        tcp_data = tcp_data .. chunk
-        coroutine.resume(dap_read)
-
-      else
-        vim.fn.rpcrequest(debug_hook_conn, "nvim_exec_lua", [[require"osv".disconnected = true]], {})
-
-        sock:shutdown()
-        sock:close()
-      end
-    end))
-
-  end)
-
-  print("Server started on " .. server:getsockname().port)
-
-  if debug_hook_conn_address then
-    debug_hook_conn = vim.fn.sockconnect("pipe", debug_hook_conn_address, {rpc = true})
-  end
-
-  return {
-    host = host,
-    port = server:getsockname().port
-  }
-end
-
 function M.stop()
   debug.sethook()
 
@@ -856,7 +720,7 @@ function M.stop()
 
   step_out = false
 
-  seq_id = 1
+  require('dap.builder').reset_seqid()
 
   M.disconnected = false
 end
