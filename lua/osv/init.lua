@@ -66,7 +66,8 @@ function M.launch(opts)
     hook_address = vim.fn.serverstart()
   end
 
-  vim.fn.rpcrequest(nvim_server, 'nvim_exec_lua', [[debug_hook_conn_address = ...]], {hook_address})
+  vim.fn.rpcrequest(nvim_server, 'nvim_exec_lua',
+    [[parent_conn_addr = ...]], {hook_address})
 
   local host = (opts and opts.host) or "127.0.0.1"
   local port = (opts and opts.port) or 0

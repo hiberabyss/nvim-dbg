@@ -1,4 +1,4 @@
-local log = require('nvimdbg.log').log
+local log = require('nvimdbg.log').dap_logger("DEBUG")
 local make_event = require('dap.builder').make_event
 local make_response = require('dap.builder').make_response
 
@@ -15,10 +15,14 @@ function M.sendDAP(msg)
     local bin_msg = "Content-Length: " .. string.len(encoded) .. "\r\n\r\n" .. encoded
 
     client:write(bin_msg)
-    -- log("SendDap: " .. bin_msg)
+    log.debug("Response: ", msg)
   else
-    log('Fail to encode lua msg: ' .. encoded)
+    log.error('Fail to encode lua msg: ' .. encoded)
   end
+end
+
+function parent_run_lua(code, args)
+  return vim.fn.rpcrequest(debug_hook_conn, "nvim_exec_lua", code, args)
 end
 
 function M.start_server(host, port)
@@ -45,10 +49,8 @@ function M.start_server(host, port)
 
       local succ, decoded = pcall(vim.fn.json_decode, body)
       if not succ then
-        log("Adapter fail to decode json")
+        log.error("Adapter fail to decode json")
       end
-
-      -- log("Adapter decoded: " .. vim.pretty_print(decoded))
 
       tcp_data = string.sub(tcp_data, length+1)
 
@@ -72,7 +74,7 @@ function M.start_server(host, port)
     local dap_read = coroutine.create(function()
       local len = read_header()
       local msg = read_body(len.content_length)
-      log("Adapter received msg: " .. vim.inspect(msg))
+      log.debug("Adapter received msg: ", msg)
 
       M.sendDAP(make_response(msg, {
         body = {}
@@ -81,40 +83,32 @@ function M.start_server(host, port)
       M.sendDAP(make_event('initialized'))
 
       while true do
-        local msg
-        do
-          local len = read_header()
-          msg = read_body(len.content_length)
-        end
+        local len = read_header()
+        local msg = read_body(len.content_length)
 
-        if debug_hook_conn then
-          vim.fn.rpcrequest(debug_hook_conn, "nvim_exec_lua", [[table.insert(require"osv".server_messages, ...)]], {msg})
-        end
+        log.debug("Adapter received msg: ", msg)
 
+        parent_run_lua([[table.insert(require"osv".server_messages, ...)]], {msg})
       end
     end)
 
     sock:read_start(vim.schedule_wrap(function(err, chunk)
-      if chunk then
-        tcp_data = tcp_data .. chunk
-        coroutine.resume(dap_read)
-      else
-        log('Adapter error, Fail to parse request!')
-        vim.fn.rpcrequest(debug_hook_conn, "nvim_exec_lua",
-          [[require"osv".disconnected = true]], {})
-
-        sock:shutdown()
-        sock:close()
-      end
+      tcp_data = tcp_data .. chunk
+      coroutine.resume(dap_read)
     end))
 
   end)
 
-  log("Adapter server started on " .. server:getsockname().port)
-  log("Hook Adress: " .. debug_hook_conn_address)
+  log.debug("Adapter server started on " .. server:getsockname().port)
+  log.debug("Hook Adress: " .. parent_conn_addr)
 
-  if debug_hook_conn_address then
-    debug_hook_conn = vim.fn.sockconnect("pipe", debug_hook_conn_address, {rpc = true})
+  if not parent_conn_addr then
+    log.error("Fail to get parent connect address!")
+  end
+
+  debug_hook_conn = vim.fn.sockconnect("pipe", parent_conn_addr, {rpc = true})
+  if not debug_hook_conn then
+    log.error("Fail to connect to parent neovim instance!")
   end
 
   return {

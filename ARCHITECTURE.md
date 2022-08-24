@@ -32,7 +32,7 @@ Launching
                 ││generate server   ├───────────►┌──────────────┐ │
                 ││address           ││ address │ │set address   │ │
                 │└──────────────────┘│         │ │    in        │ │
-                │         │          │        debug_hook_conn_address
+                │         │          │        parent_conn_addr
                 │         │          │         │ │              │ │
                 │         │          │         │ │              │ │
                 │         │          │         │ └──────────────┘ │
@@ -50,7 +50,7 @@ Launching
                 │                    │◄══════════│    back      │ │
                 │                    │         │ │ to debuggee  │ │
                 │                    │         │ │    with      │ │
-                │                    │        debug_hook_conn_address
+                │                    │        parent_conn_addr
                 │                    │         │ └──────────────┘ │
                 │                    │         │                  │
                 └────────────────────┘         └──────────────────┘
