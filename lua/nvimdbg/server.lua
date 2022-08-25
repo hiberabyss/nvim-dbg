@@ -1,6 +1,7 @@
 local log = require('nvimdbg.log').dap_logger("DEBUG")
 local make_event = require('dap.builder').make_event
 local make_response = require('dap.builder').make_response
+local is_initialize = require('dap.builder').is_initialize
 
 local client
 local debug_hook_conn 
@@ -14,6 +15,11 @@ end
 
 function M.send_dap_event(event, body)
   M.sendDAP(make_event(event, body))
+end
+
+function do_initialize(request)
+  M.send_dap_response(request, {body = {}})
+  M.send_dap_event('initialized')
 end
 
 function M.sendDAP(msg)
@@ -80,23 +86,17 @@ function M.start_server(host, port)
     end
 
     local dap_read = coroutine.create(function()
-      local len = read_header()
-      local msg = read_body(len.content_length)
-      log.debug("Adapter received msg: ", msg)
-
-      M.sendDAP(make_response(msg, {
-        body = {}
-      }))
-
-      M.sendDAP(make_event('initialized'))
-
       while true do
         local len = read_header()
         local msg = read_body(len.content_length)
 
         log.debug("Adapter received msg: ", msg)
 
-        parent_run_lua([[table.insert(require"osv".server_messages, ...)]], {msg})
+        if is_initialize(msg) then
+          do_initialize(msg)
+        else
+          parent_run_lua([[table.insert(require"osv".server_messages, ...)]], {msg})
+        end
       end
     end)
 

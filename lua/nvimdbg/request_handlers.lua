@@ -1,10 +1,14 @@
 local handlers = {}
 
-local osv = require('osv')
+local M = require('osv')
 
-local function sendProxyDAP(data)
-  vim.fn.rpcnotify(osv.nvim_server, 'nvim_exec_lua',
-    [[require"nvimdbg.server".sendDAP(...)]], {data})
+function handlers.attach(request)
+  M.send_proxy_dap_response(request, {})
 end
+
+--[[ function handlers.initialize(request)
+  M.send_proxy_dap_response(request, {body = {}})
+  M.send_proxy_dap_event('initialized')
+end ]]
 
 return handlers

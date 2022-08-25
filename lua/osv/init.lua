@@ -33,7 +33,7 @@ local util = require('nvimdbg.util')
 local M = {}
 M.disconnected = false
 
-local function send_proxy_dap_response(request, response)
+function M.send_proxy_dap_response(request, response)
   vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua',
     [[require"nvimdbg.server".send_dap_response(...)]], {request, response})
 end
@@ -83,7 +83,7 @@ function M.launch(opts)
 end
 
 function M.wait_attach()
-  log("Begin wait attach!")
+  dlog.debug("Wait for attach..........")
   local timer = vim.loop.new_timer()
   timer:start(0, 100, vim.schedule_wrap(function()
     local has_attach = false
@@ -95,24 +95,21 @@ function M.wait_attach()
 
     if not has_attach then return end
     timer:close()
+    dlog.debug("Begin process request, nums: ", #M.server_messages)
 
     local handlers = require('nvimdbg.request_handlers')
     local breakpoints = {}
 
-    function handlers.attach(request)
-      send_proxy_dap_response(request, {})
-    end
-
     function handlers.continue(request)
       running = true
 
-      send_proxy_dap_response(request, {})
+      M.send_proxy_dap_response(request, {})
     end
 
     function handlers.disconnect(request)
       debug.sethook()
 
-      send_proxy_dap_response(request, {})
+      M.send_proxy_dap_response(request, {})
 
       vim.wait(1000)
       if nvim_server then
@@ -170,7 +167,7 @@ function M.wait_attach()
           result_repl = f
         end
 
-        send_proxy_dap_response(request, {
+        M.send_proxy_dap_response(request, {
           body = {
             result = vim.inspect(result_repl),
             variablesReference = 0,
@@ -197,7 +194,7 @@ function M.wait_attach()
 
       running = true
 
-      send_proxy_dap_response(request, {})
+      M.send_proxy_dap_response(request, {})
     end
 
     function handlers.pause(request)
@@ -228,7 +225,7 @@ function M.wait_attach()
 
       table.insert(scopes, local_scope)
 
-      send_proxy_dap_response(request, {
+      M.send_proxy_dap_response(request, {
         body = {
           scopes = scopes,
         };
@@ -251,12 +248,11 @@ function M.wait_attach()
         log("Set breakpoint at line " .. bp.line .. " in " .. args.source.path)
       end
 
-      send_proxy_dap_response(request, {
+      M.send_proxy_dap_response(request, {
         body = {
           breakpoints = results_bps
         }
       })
-
     end
 
     function handlers.stackTrace(request)
@@ -292,7 +288,7 @@ function M.wait_attach()
       end
 
 
-      send_proxy_dap_response(request, {
+      M.send_proxy_dap_response(request, {
         body = {
           stackFrames = stack_frames,
           totalFrames = #stack_frames,
@@ -306,7 +302,7 @@ function M.wait_attach()
       running = true
 
 
-      send_proxy_dap_response(request,{})
+      M.send_proxy_dap_response(request,{})
     end
 
     function handlers.stepOut(request)
@@ -326,12 +322,12 @@ function M.wait_attach()
       running = true
 
 
-      send_proxy_dap_response(request, {})
+      M.send_proxy_dap_response(request, {})
 
     end
 
     function handlers.threads(request)
-      send_proxy_dap_response(request, {
+      M.send_proxy_dap_response(request, {
         body = {
           threads = {
             {
@@ -418,7 +414,7 @@ function M.wait_attach()
 
       end
 
-      send_proxy_dap_response(request, {
+      M.send_proxy_dap_response(request, {
         body = {
           variables = variables,
         }
@@ -426,22 +422,20 @@ function M.wait_attach()
     end
 
     debug.sethook(function(event, line)
-      -- log("Event: " .. event)
       local i = 1
       while i <= #M.server_messages do
         local msg = M.server_messages[i]
         local f = handlers[msg.command]
-        log(vim.inspect(msg))
+        dlog.trace("Process server command")
         if f then
           f(msg)
         else
-          log("Could not handle " .. msg.command)
+          dlog.error("Could not handle ", msg)
         end
         i = i + 1
       end
 
       M.server_messages = {}
-
 
       local depth = 0
       if monitor_stack then

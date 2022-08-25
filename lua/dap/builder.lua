@@ -33,4 +33,12 @@ function M.reset_seqid()
   seq_id = 1
 end
 
+function M.is_initialize(request)
+  if not request or request.command ~= 'initialize' then
+    return false
+  end
+
+  return true
+end
+
 return M
