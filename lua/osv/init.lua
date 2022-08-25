@@ -13,7 +13,6 @@ local vars_id = 1
 local vars_ref = {}
 
 local frame_id = 1
-local frames = {}
 
 local step_in
 
@@ -32,6 +31,7 @@ local util = require('nvimdbg.util')
 
 local M = {}
 M.disconnected = false
+M.frames = {}
 
 function M.send_proxy_dap_response(request, response)
   vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua',
@@ -118,66 +118,6 @@ function M.wait_attach()
       end
     end
 
-    function handlers.evaluate(request)
-      local args = request.arguments
-      if args.context == "repl" then
-        local frame = frames[args.frameId]
-        -- what is this abomination...
-        --              a former c++ programmer
-        local a = 1
-        local prev
-        local cur = {}
-        local first = cur
-
-        while true do
-          local succ, ln, lv = pcall(debug.getlocal, frame+1, a)
-          if not succ then
-            break
-          end
-
-          if not ln then
-            prev = cur
-
-            cur = {}
-            setmetatable(prev, {
-              __index = cur
-            })
-
-            frame = frame + 1
-            a = 1
-          else
-            cur[ln] = lv
-            a = a + 1
-          end
-        end
-
-        setmetatable(cur, {
-          __index = _G
-        })
-
-        local succ, f = pcall(loadstring, "return " .. args.expression)
-        if succ and f then
-          setfenv(f, first)
-        end
-
-        local result_repl
-        if succ then
-          succ, result_repl = pcall(f)
-        else
-          result_repl = f
-        end
-
-        M.send_proxy_dap_response(request, {
-          body = {
-            result = vim.inspect(result_repl),
-            variablesReference = 0,
-          }
-        })
-      else
-        log("evaluate context " .. args.context .. " not supported!")
-      end
-    end
-
     function handlers.next(request)
       local depth = 0
       while true do
@@ -204,7 +144,7 @@ function M.wait_attach()
 
     function handlers.scopes(request)
       local args = request.arguments
-      local frame = frames[args.frameId]
+      local frame = M.frames[args.frameId]
       if not frame then 
         log("Frame not found!")
         return 
@@ -281,7 +221,7 @@ function M.wait_attach()
           stack_frame.column = 0
         end
         table.insert(stack_frames, stack_frame)
-        frames[frame_id] = 2+levels+start_frame
+        M.frames[frame_id] = 2+levels+start_frame
         frame_id = frame_id + 1
 
         levels = levels + 1
@@ -674,7 +614,7 @@ function M.stop()
   vars_ref = {}
 
   frame_id = 1
-  frames = {}
+  M.frames = {}
 
   step_out = false
 
