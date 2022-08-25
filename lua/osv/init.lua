@@ -25,22 +25,22 @@ local hook_address
 
 local auto_nvim
 
--- for now, only accepts a single
--- connection
-local sendProxyDAP
-
 local log = require('nvimdbg.log').log
+local dlog = require('nvimdbg.log').dap_logger("DEBUG")
 
 local util = require('nvimdbg.util')
-local make_event = require('dap.builder').make_event
-local make_response = require('dap.builder').make_response
 
 local M = {}
 M.disconnected = false
 
-function sendProxyDAP(data)
+local function send_proxy_dap_response(request, response)
   vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua',
-    [[require"nvimdbg.server".sendDAP(...)]], {data})
+    [[require"nvimdbg.server".send_dap_response(...)]], {request, response})
+end
+
+local function send_proxy_dap_event(event, body)
+  vim.fn.rpcnotify(nvim_server, 'nvim_exec_lua',
+    [[require"nvimdbg.server".send_dap_event(...)]], {event, body})
 end
 
 function M.launch(opts)
@@ -58,6 +58,7 @@ function M.launch(opts)
   end
 
   nvim_server = vim.fn.jobstart({vim.v.progpath, '--embed', '--headless'}, {rpc = true})
+  M.nvim_server = nvim_server
 
   local mode = vim.fn.rpcrequest(nvim_server, "nvim_get_mode")
   assert(not mode.blocking, "Neovim is waiting for input at startup. Aborting.")
@@ -95,24 +96,23 @@ function M.wait_attach()
     if not has_attach then return end
     timer:close()
 
-    local handlers = {}
+    local handlers = require('nvimdbg.request_handlers')
     local breakpoints = {}
 
     function handlers.attach(request)
-      sendProxyDAP(make_response(request, {}))
+      send_proxy_dap_response(request, {})
     end
-
 
     function handlers.continue(request)
       running = true
 
-      sendProxyDAP(make_response(request,{}))
+      send_proxy_dap_response(request, {})
     end
 
     function handlers.disconnect(request)
       debug.sethook()
 
-      sendProxyDAP(make_response(request, {}))
+      send_proxy_dap_response(request, {})
 
       vim.wait(1000)
       if nvim_server then
@@ -170,12 +170,12 @@ function M.wait_attach()
           result_repl = f
         end
 
-        sendProxyDAP(make_response(request, {
+        send_proxy_dap_response(request, {
           body = {
             result = vim.inspect(result_repl),
             variablesReference = 0,
           }
-        }))
+        })
       else
         log("evaluate context " .. args.context .. " not supported!")
       end
@@ -197,7 +197,7 @@ function M.wait_attach()
 
       running = true
 
-      sendProxyDAP(make_response(request, {}))
+      send_proxy_dap_response(request, {})
     end
 
     function handlers.pause(request)
@@ -228,11 +228,11 @@ function M.wait_attach()
 
       table.insert(scopes, local_scope)
 
-      sendProxyDAP(make_response(request,{
+      send_proxy_dap_response(request, {
         body = {
           scopes = scopes,
         };
-      }))
+      })
     end
 
     function handlers.setBreakpoints(request)
@@ -251,11 +251,11 @@ function M.wait_attach()
         log("Set breakpoint at line " .. bp.line .. " in " .. args.source.path)
       end
 
-      sendProxyDAP(make_response(request, {
+      send_proxy_dap_response(request, {
         body = {
           breakpoints = results_bps
         }
-      }))
+      })
 
     end
 
@@ -292,12 +292,12 @@ function M.wait_attach()
       end
 
 
-      sendProxyDAP(make_response(request,{
+      send_proxy_dap_response(request, {
         body = {
           stackFrames = stack_frames,
           totalFrames = #stack_frames,
         };
-      }))
+      })
     end
 
     function handlers.stepIn(request)
@@ -306,8 +306,7 @@ function M.wait_attach()
       running = true
 
 
-      sendProxyDAP(make_response(request,{}))
-
+      send_proxy_dap_response(request,{})
     end
 
     function handlers.stepOut(request)
@@ -327,12 +326,12 @@ function M.wait_attach()
       running = true
 
 
-      sendProxyDAP(make_response(request, {}))
+      send_proxy_dap_response(request, {})
 
     end
 
     function handlers.threads(request)
-      sendProxyDAP(make_response(request, {
+      send_proxy_dap_response(request, {
         body = {
           threads = {
             {
@@ -341,8 +340,9 @@ function M.wait_attach()
             }
           }
         }
-      }))
+      })
     end
+
     function handlers.variables(request)
       local args = request.arguments
 
@@ -418,11 +418,11 @@ function M.wait_attach()
 
       end
 
-      sendProxyDAP(make_response(request, {
+      send_proxy_dap_response(request, {
         body = {
           variables = variables,
         }
-      }))
+      })
     end
 
     debug.sethook(function(event, line)
@@ -463,20 +463,9 @@ function M.wait_attach()
           local path = source_path:sub(2)
           path = util.get_uri_path(path)
 
-          if path:sub(-10) == 'window.lua' then
-            log("My BP: " .. vim.inspect(bps))
-            log("Info: " .. vim.inspect(info))
-            log("Path: " .. path)
-          end
-
           if bps[path] then
             log("breakpoint hit")
-            local msg = make_event("stopped")
-            msg.body = {
-              reason = "breakpoint",
-              threadId = 1
-            }
-            sendProxyDAP(msg)
+            send_proxy_dap_event("stopped", { reason = "breakpoint", threadId = 1 })
             running = false
             while not running do
               if M.disconnected then
@@ -505,12 +494,7 @@ function M.wait_attach()
 
 
       elseif event == "line" and step_in then
-        local msg = make_event("stopped")
-        msg.body = {
-          reason = "step",
-          threadId = 1
-        }
-        sendProxyDAP(msg)
+        send_proxy_dap_event("stopped", { reason = "step", threadId = 1 })
         step_in = false
 
 
@@ -539,12 +523,7 @@ function M.wait_attach()
 
 
       elseif event == "line" and next and depth == stack_level then
-        local msg = make_event("stopped")
-        msg.body = {
-          reason = "step",
-          threadId = 1
-        }
-        sendProxyDAP(msg)
+        send_proxy_dap_event("stopped", { reason = "step", threadId = 1 })
         next = false
         monitor_stack = false
 
@@ -574,12 +553,7 @@ function M.wait_attach()
 
 
       elseif event == "line" and step_out and stack_level-1 == depth then
-        local msg = make_event("stopped")
-        msg.body = {
-          reason = "step",
-          threadId = 1
-        }
-        sendProxyDAP(msg)
+        send_proxy_dap_event("stopped", { reason = "step", threadId = 1 })
         step_out = false
         monitor_stack = false
 
@@ -609,13 +583,7 @@ function M.wait_attach()
 
       elseif event == "line" and pause then
         pause = false
-
-        local msg = make_event("stopped")
-        msg.body = {
-          reason = "pause",
-          threadId = 1
-        }
-        sendProxyDAP(msg)
+        send_proxy_dap_event("stopped", { reason = "pause", threadId = 1 })
         running = false
         while not running do
           if M.disconnected then
@@ -690,13 +658,8 @@ end
 function M.stop()
   debug.sethook()
 
-  sendProxyDAP(make_event("terminated"))
-
-  local msg = make_event("exited")
-  msg.body = {
-    exitCode = 0,
-  }
-  sendProxyDAP(msg)
+  send_proxy_dap_event("terminated")
+  send_proxy_dap_event("exited", { exitCode = 0 })
 
   if nvim_server then
     vim.fn.jobstop(nvim_server)

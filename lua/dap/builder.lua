@@ -14,12 +14,17 @@ function M.make_response(request, response)
   return vim.tbl_extend('error', msg, response)
 end
 
-function M.make_event(event)
+function M.make_event(event, body)
   local msg = {
     type = "event",
     seq = seq_id,
     event = event,
   }
+
+  if body then
+    msg.body = body
+  end
+
   seq_id = seq_id + 1
   return msg
 end

@@ -8,6 +8,14 @@ local disconnected = require('osv').disconnected
 
 local M = {}
 
+function M.send_dap_response(request, response)
+  M.sendDAP(make_response(request, response))
+end
+
+function M.send_dap_event(event, body)
+  M.sendDAP(make_event(event, body))
+end
+
 function M.sendDAP(msg)
   local succ, encoded = pcall(vim.fn.json_encode, msg)
 
