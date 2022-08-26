@@ -155,7 +155,7 @@ osv logging                                                 *osv-logging*
 Logging can be enabled by passing the corresponding parameter in
 |osv.launch|. The log will be written in:
 >
-  echo stdpath('data') . '/osv.log'
+  echo stdpath('cache') . '/osv.log'
 <
 =========================================================================
 osv plugins debugging                             *osv-plugins-debugging

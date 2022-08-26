@@ -24,8 +24,7 @@ local hook_address
 
 local auto_nvim
 
-local log = require('nvimdbg.log').log
-local dlog = require('nvimdbg.log').dap_logger("DEBUG")
+local log = require('nvimdbg.log').dap_logger("DEBUG")
 
 local util = require('nvimdbg.util')
 
@@ -47,8 +46,6 @@ function M.launch(opts)
   vim.validate {
     opts = {opts, 't', true}
   }
-
-  require('nvimdbg.log').init(opts)
 
   if opts then
     vim.validate {
@@ -75,7 +72,7 @@ function M.launch(opts)
   local server = vim.fn.rpcrequest(nvim_server, 'nvim_exec_lua',
     [[return require"nvimdbg.server".start_server(...)]], {host, port})
 
-  log("Server started on port " .. server.port)
+  log.debug("Server started on port " .. server.port)
   print("Server started on port " .. server.port)
   M.disconnected = false
   vim.defer_fn(M.wait_attach, 0)
@@ -83,7 +80,7 @@ function M.launch(opts)
 end
 
 function M.wait_attach()
-  dlog.debug("Wait for attach..........")
+  log.debug("Wait for attach..........")
   local timer = vim.loop.new_timer()
   timer:start(0, 100, vim.schedule_wrap(function()
     local has_attach = false
@@ -95,7 +92,7 @@ function M.wait_attach()
 
     if not has_attach then return end
     timer:close()
-    dlog.debug("Begin process request, nums: ", #M.server_messages)
+    log.debug("Begin process request, nums: ", #M.server_messages)
 
     local handlers = require('nvimdbg.request_handlers')
     local breakpoints = {}
@@ -146,7 +143,7 @@ function M.wait_attach()
       local args = request.arguments
       local frame = M.frames[args.frameId]
       if not frame then 
-        log("Frame not found!")
+        log.error("Frame not found!")
         return 
       end
 
@@ -185,7 +182,7 @@ function M.wait_attach()
         local line_bps = breakpoints[bp.line]
         line_bps[src_uri_path] = true
         table.insert(results_bps, { verified = true })
-        log("Set breakpoint at line " .. bp.line .. " in " .. args.source.path)
+        log.debug("Set breakpoint at line ", bp.line, " in ", args.source.path)
       end
 
       M.send_proxy_dap_response(request, {
@@ -366,11 +363,11 @@ function M.wait_attach()
       while i <= #M.server_messages do
         local msg = M.server_messages[i]
         local f = handlers[msg.command]
-        dlog.trace("Process server command")
+        log.trace("Process server command")
         if f then
           f(msg)
         else
-          dlog.error("Could not handle ", msg)
+          log.error("Could not handle ", msg)
         end
         i = i + 1
       end
@@ -398,7 +395,7 @@ function M.wait_attach()
           path = util.get_uri_path(path)
 
           if bps[path] then
-            log("breakpoint hit")
+            log.debug("breakpoint hit")
             send_proxy_dap_event("stopped", { reason = "breakpoint", threadId = 1 })
             running = false
             while not running do
@@ -409,11 +406,11 @@ function M.wait_attach()
               while i <= #M.server_messages do
                 local msg = M.server_messages[i]
                 local f = handlers[msg.command]
-                log(vim.inspect(msg))
+                log.debug(msg)
                 if f then
                   f(msg)
                 else
-                  log("Could not handle " .. msg.command)
+                  log.error("Could not handle ", msg)
                 end
                 i = i + 1
               end
@@ -441,11 +438,11 @@ function M.wait_attach()
           while i <= #M.server_messages do
             local msg = M.server_messages[i]
             local f = handlers[msg.command]
-            log(vim.inspect(msg))
+            log.debug(msg)
             if f then
               f(msg)
             else
-              log("Could not handle " .. msg.command)
+              log.error("Could not handle ", msg.command)
             end
             i = i + 1
           end
@@ -471,11 +468,11 @@ function M.wait_attach()
           while i <= #M.server_messages do
             local msg = M.server_messages[i]
             local f = handlers[msg.command]
-            log(vim.inspect(msg))
+            log.debug(msg)
             if f then
               f(msg)
             else
-              log("Could not handle " .. msg.command)
+              log.error("Could not handle ", msg.command)
             end
             i = i + 1
           end
@@ -501,11 +498,11 @@ function M.wait_attach()
           while i <= #M.server_messages do
             local msg = M.server_messages[i]
             local f = handlers[msg.command]
-            log(vim.inspect(msg))
+            log.debug(msg)
             if f then
               f(msg)
             else
-              log("Could not handle " .. msg.command)
+              log.error("Could not handle " .. msg.command)
             end
             i = i + 1
           end
@@ -527,11 +524,11 @@ function M.wait_attach()
           while i <= #M.server_messages do
             local msg = M.server_messages[i]
             local f = handlers[msg.command]
-            log(vim.inspect(msg))
+            log.debug(msg)
             if f then
               f(msg)
             else
-              log("Could not handle " .. msg.command)
+              log.error("Could not handle " .. msg.command)
             end
             i = i + 1
           end
