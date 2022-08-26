@@ -1,7 +1,5 @@
 local log = require('nvimdbg.log').dap_logger("DEBUG")
-local make_event = require('dap.builder').make_event
-local make_response = require('dap.builder').make_response
-local is_initialize = require('dap.builder').is_initialize
+local dbg_dap = require('nvimdbg.dap')
 
 local client
 local debug_hook_conn 
@@ -10,11 +8,11 @@ local disconnected = require('osv').disconnected
 local M = {}
 
 function M.send_dap_response(request, response)
-  M.sendDAP(make_response(request, response))
+  M.sendDAP(dbg_dap.make_response(request, response))
 end
 
 function M.send_dap_event(event, body)
-  M.sendDAP(make_event(event, body))
+  M.sendDAP(dbg_dap.make_event(event, body))
 end
 
 function do_initialize(request)
@@ -92,7 +90,7 @@ function M.start_server(host, port)
 
         log.debug("Adapter received msg: ", msg)
 
-        if is_initialize(msg) then
+        if dbg_dap.is_initialize(msg) then
           do_initialize(msg)
         else
           parent_run_lua([[table.insert(require"osv".server_messages, ...)]], {msg})

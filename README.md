@@ -18,7 +18,6 @@ Plug 'mfussenegger/nvim-dap'
 After installing `one-small-step-for-vimkind`, you will also need a DAP plugin which will allow you to interact with the adapter. There are mainly two available:
 
   * [nvim-dap](https://github.com/mfussenegger/nvim-dap)
-  * [vimspector](https://github.com/puremourning/vimspector) 
 
 ## Configuration
 

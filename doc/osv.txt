@@ -11,7 +11,6 @@ In order to use |one-small-step-for-vimkind|, you will need a DAP client.
 You can choose between two alternatives which are:
 
   nvim-dap: https://github.com/mfussenegger/nvim-dap
-  vimspector: https://github.com/puremourning/vimspector
 
 |one-small-step-for-vimkind| was mainly developed with nvim-dap which
 is the one recommanded.

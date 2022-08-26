@@ -618,7 +618,7 @@ function M.stop()
 
   step_out = false
 
-  require('dap.builder').reset_seqid()
+  require('nvimdbg.dap').reset_seqid()
 
   M.disconnected = false
 end
