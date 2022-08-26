@@ -1,5 +1,5 @@
 local handlers = {}
-local log = require('nvimdbg.log').dap_logger("DEBUG")
+local log = require('nvimdbg.log').logger()
 
 local M = require('osv')
 

@@ -24,7 +24,7 @@ local hook_address
 
 local auto_nvim
 
-local log = require('nvimdbg.log').dap_logger("DEBUG")
+local log = require('nvimdbg.log').logger()
 
 local util = require('nvimdbg.util')
 

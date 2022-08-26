@@ -1,6 +1,6 @@
 local M = {}
 
-function M.dap_logger(level)
+function M.logger(level)
   local log = require('dap.log')
   assert(log, 'nvim-dap log module not found!')
 
